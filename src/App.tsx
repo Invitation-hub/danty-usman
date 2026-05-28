@@ -329,7 +329,7 @@ export default function App() {
           {guestName && (
             <div className="mb-6 w-full max-w-xs mx-auto bg-white/60 p-4 rounded-xl border border-white/50 backdrop-blur-sm">
               <p className="font-serif text-xs mb-1 italic text-[#9B6E82]">Specially invited for:</p>
-              <p className="text-lg font-bold capitalize text-[#4A2D3A]">{guestName}</p>
+              <p className="text-lg font-bold capitalize text-[#7D4A65]">{guestName}</p>
             </div>
           )}
           
