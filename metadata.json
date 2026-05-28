@@ -1,0 +1,8 @@
+{
+  "name": "Undangan Pernikahan Usman & Dinda",
+  "description": "Undangan pernikahan digital dengan fitur interaktif, countdown, musik autoplay, dan peta lokasi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
