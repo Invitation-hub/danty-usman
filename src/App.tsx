@@ -3,9 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Volume2, VolumeX, MapPin, Copy, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import React, { useEffect, useRef, useState, FormEvent } from 'react';
+import { Volume2, VolumeX, MapPin, Copy, CheckCircle2, Eye, EyeOff, Send, MessageSquareHeart } from 'lucide-react';
 import floralBg from './assets/images/floral_wedding_background_1779948377135.png';
+
+type Message = {
+  name: string;
+  message: string;
+  attendance?: string;
+  timestamp: string;
+};
 
 const FloralBackground = () => (
   <>
@@ -52,11 +59,11 @@ const Countdown = ({ targetDate }: { targetDate: string }) => {
   }, [targetDate]);
 
   return (
-    <div className="grid grid-cols-4 gap-2 w-full mt-4">
+    <div className="grid grid-cols-4 gap-3 w-full max-w-sm mt-4">
       {Object.entries(timeLeft).map(([unit, value]) => (
-        <div key={unit} className="bg-blush rounded-lg p-2 text-center flex flex-col justify-center">
-          <span className="text-xl md:text-2xl font-black text-rose leading-none">{value.toString().padStart(2, '0')}</span>
-          <span className="text-[10px] uppercase text-dusty tracking-wider mt-1">{unit}</span>
+        <div key={unit} className="border border-rose/50 rounded-lg p-3 text-center flex flex-col items-center justify-center bg-white/30 backdrop-blur-sm">
+          <span className="text-2xl md:text-3xl font-serif text-[#4A2D3A] leading-none mb-1">{value.toString().padStart(2, '0')}</span>
+          <span className="text-[10px] uppercase text-[#9B6E82] tracking-widest font-semibold">{unit}</span>
         </div>
       ))}
     </div>
@@ -66,9 +73,10 @@ const Countdown = ({ targetDate }: { targetDate: string }) => {
 const generateCalendarLink = (title: string, dateStr: string, location: string) => {
   const startDate = "20260626T080000Z";
   const endDate = "20260626T110000Z";
-  const details = encodeURIComponent(`Acara ${title} Usman & Dinda`);
+  const titleText = `${title} - Danty & Usman`;
+  const desc = `Acara Akad Nikah Usman & Dinda\n\nLokasi: Saung Apung Villa Nusa Indah\nGoogle Maps: https://maps.app.goo.gl/ef9vPRthrwXakDiT6`;
   const loc = encodeURIComponent(location);
-  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startDate}/${endDate}&details=${details}&location=${loc}`;
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(titleText)}&dates=${startDate}/${endDate}&details=${encodeURIComponent(desc)}&location=${loc}`;
 };
 
 function RekeningCard({ bank, noRek, name }: { bank: string; noRek: string; name: string }) {
@@ -83,19 +91,19 @@ function RekeningCard({ bank, noRek, name }: { bank: string; noRek: string; name
 
   return (
     <div className="text-center flex flex-col items-center">
-      <p className="text-[12px] font-bold text-[#4A2D3A] uppercase">{bank}</p>
+      <p className="text-sm md:text-base font-bold text-[#4A2D3A] uppercase">{bank}</p>
       <div className="flex items-center gap-2 justify-center my-1 text-[#4A2D3A]">
-        <p className="text-sm font-bold tracking-widest translate-y-[1px]">
+        <p className="text-base md:text-lg font-bold tracking-widest translate-y-[1px]">
           {show ? noRek : noRek.replace(/./g, '•')}
         </p>
         <button 
           onClick={() => setShow(!show)} 
           className="text-gray-400 hover:text-rose cursor-pointer flex-shrink-0"
         >
-          {show ? <EyeOff size={14} /> : <Eye size={14} />}
+          {show ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
-      <p className="text-[10px] text-[#9B6E82] mb-2">{name}</p>
+      <p className="text-xs md:text-sm text-[#9B6E82] mb-2">{name}</p>
       
       <button 
         onClick={handleCopy}
@@ -132,8 +140,8 @@ function AddressCard({ address, name }: { address: string; name: string }) {
       <div className="flex justify-center mb-2">
         <MapPin size={18} className="text-rose" />
       </div>
-      <p className="text-xs font-bold text-[#4A2D3A] mb-1">Alamat Pengiriman</p>
-      <p className="text-[10px] text-[#9B6E82] mb-3 leading-relaxed">
+      <p className="text-sm md:text-base font-bold text-[#4A2D3A] mb-1">Alamat Pengiriman</p>
+      <p className="text-xs md:text-sm text-[#9B6E82] mb-3 leading-relaxed">
         {address}<br/>
         (Atas Nama: {name})
       </p>
@@ -163,19 +171,62 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const autoScrollInterval = useRef<number | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
   
   const searchParams = new window.URLSearchParams(window.location.search);
   const guestParam = searchParams.get('to');
   const guestName = guestParam ? guestParam.replace(/-/g, ' ') : null;
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newName, setNewName] = useState('');
+  const [newMessage, setNewMessage] = useState('');
+  const [newAttendance, setNewAttendance] = useState('Hadir');
+
+  const fetchMessages = async () => {
+    try {
+      const res = await fetch('/api/messages');
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch messages', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchMessages();
+  }, []);
+
+  const handleMessageSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim() || !newMessage.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, message: newMessage, attendance: newAttendance }),
+      });
+      if (res.ok) {
+        const addedMessage = await res.json();
+        setMessages((prev) => [addedMessage, ...prev]);
+        setNewName('');
+        setNewMessage('');
+        setNewAttendance('Hadir');
+      }
+    } catch (err) {
+      console.error('Failed to post message', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const startAutoScroll = () => {
     autoScrollInterval.current = window.setInterval(() => {
-      // On desktop, scroll the right container. On mobile, scroll the main view.
-      if (window.innerWidth >= 768 && scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop += 1;
-      } else if (mainRef.current) {
+      if (mainRef.current) {
         mainRef.current.scrollTop += 1;
       }
     }, 24);
@@ -194,25 +245,16 @@ export default function App() {
     };
 
     const container = mainRef.current;
-    const scrollContainer = scrollContainerRef.current;
     
     if (container) {
       container.addEventListener('wheel', handleUserInteraction, { passive: true });
       container.addEventListener('touchstart', handleUserInteraction, { passive: true });
-    }
-    if (scrollContainer) {
-      scrollContainer.addEventListener('wheel', handleUserInteraction, { passive: true });
-      scrollContainer.addEventListener('touchstart', handleUserInteraction, { passive: true });
     }
 
     return () => {
       if (container) {
         container.removeEventListener('wheel', handleUserInteraction);
         container.removeEventListener('touchstart', handleUserInteraction);
-      }
-      if (scrollContainer) {
-        scrollContainer.removeEventListener('wheel', handleUserInteraction);
-        scrollContainer.removeEventListener('touchstart', handleUserInteraction);
       }
       stopAutoScroll();
     };
@@ -227,8 +269,7 @@ export default function App() {
     setTimeout(() => {
       setIsOpened(true);
       setTimeout(() => {
-        if (window.innerWidth < 768 && mainRef.current) {
-          // on mobile, jump scroll to top since hero is hidden
+        if (mainRef.current) {
           mainRef.current.scrollTo(0, 0);
         }
         setTimeout(() => {
@@ -254,7 +295,7 @@ export default function App() {
   return (
     <div 
       ref={mainRef} 
-      className={`h-[100dvh] w-full bg-white font-sans text-gray-700 selection:bg-rose selection:text-white flex flex-col md:flex-row relative ${isOpened ? 'overflow-y-auto' : 'overflow-hidden'} md:overflow-hidden`}
+      className={`h-[100dvh] w-full bg-white font-sans text-gray-700 selection:bg-rose selection:text-white relative ${isOpened ? 'overflow-y-auto' : 'overflow-hidden'} overflow-x-hidden`}
     >
       <audio ref={audioRef} loop src={audioUrl} />
 
@@ -268,15 +309,17 @@ export default function App() {
         </button>
       )}
 
-      {/* HERO SECTION / SIDEBAR */}
-      <section className={`relative h-[100dvh] w-full md:w-[380px] shrink-0 flex-col items-center justify-center p-8 text-center bg-blush md:border-r border-rose overflow-hidden ${isOpened ? 'hidden' : 'flex'}`}>
+      {/* HERO SECTION */}
+      <section className={`relative min-h-[100dvh] w-full flex-col items-center justify-center p-8 text-center bg-blush overflow-hidden ${isOpened ? 'hidden' : 'flex'}`}>
         <FloralBackground />
         
         <div className="relative z-10 flex flex-col items-center w-full">
           <p className="text-xs tracking-widest text-rose uppercase mb-2 font-bold bg-white/70 px-3 py-1 rounded-full">The Wedding of</p>
           
           <h1 className="font-serif font-bold italic text-rose my-2 leading-tight text-5xl md:text-6xl drop-shadow-sm">
-            Danty &<br/>Usman
+            Danty <br/>
+            <span className="text-3xl md:text-4xl px-2">&</span> <br/>
+            Usman
           </h1>
           
           <Separator />
@@ -304,78 +347,87 @@ export default function App() {
             </button>
           )}
 
-          <p className="text-[10px] text-white bg-rose/60 px-3 py-1 rounded-full mt-12 tracking-widest font-semibold backdrop-blur-sm">#SuperMANforDANTY</p>
+          <p className="text-xs md:text-sm text-white bg-rose/60 px-4 py-1.5 rounded-full mt-12 tracking-widest font-semibold backdrop-blur-sm">#SuperMANforDANTY</p>
         </div>
       </section>
 
       {/* CONTENT AREA */}
       {isOpened && (
         <div 
-          ref={scrollContainerRef}
           id="content-area"
-          className="flex-1 min-h-[100dvh] h-auto md:h-screen md:overflow-y-auto bg-white p-6 md:p-10 animate-fade-in relative z-10 w-full"
+          className="min-h-[100dvh] w-full animate-fade-in relative z-10"
         >
-          <div className="relative h-full max-w-3xl mx-auto">
-            <div className="fixed inset-0 md:absolute md:inset-0 z-0">
-               <FloralBackground />
-            </div>
+          <div className="fixed inset-0 z-0">
+             <FloralBackground />
+          </div>
+
+          <div className="relative max-w-3xl mx-auto p-6 md:p-10 z-10 h-full">
             
-            <div className="grid md:grid-cols-2 gap-6 relative z-10 pb-20 pt-4">
+            <div className="flex flex-col gap-6 md:gap-8 relative z-10 pb-20 pt-4">
               
               {/* SECTION: QUOTE */}
-              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 shadow-xl md:col-span-2 text-center flex flex-col items-center justify-center">
-                <p className="font-serif text-lg italic text-[#4A2D3A] leading-relaxed">
+              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 md:p-8 shadow-xl text-center flex flex-col items-center justify-center">
+                <p className="font-serif text-xl md:text-2xl italic text-[#4A2D3A] leading-relaxed">
                   "Dan Kami jadikan kamu berpasang-pasangan"
                 </p>
-                <p className="text-[10px] text-[#9B6E82] italic mt-1 font-bold">An-Naba 78:8</p>
+                <p className="text-xs md:text-sm text-[#9B6E82] italic mt-2 font-bold">An-Naba 78:8</p>
                 <Separator />
-                <p className="text-xs text-gray-600 leading-relaxed px-4">
+                <p className="text-sm md:text-base text-[#9B6E82] leading-relaxed px-4">
                   Dan di antara tanda-tanda (kebesaran)-Nya ialah Dia menciptakan pasangan-pasangan untukmu dari jenismu sendiri, agar kamu cenderung dan merasa tenteram kepadanya, dan Dia menjadikan di antaramu rasa kasih dan sayang.
                 </p>
-                <p className="text-[10px] mt-3 font-bold opacity-60 uppercase text-gray-500">
+                <p className="text-xs md:text-sm mt-3 font-bold opacity-60 uppercase text-[#9B6E82]">
                   (QS. Ar-Rum: 21)
                 </p>
               </div>
 
               {/* SECTION: COUNTDOWN */}
-              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center">
-                <h3 className="font-serif text-xl mb-2 text-rose">Menuju Hari Istimewa</h3>
+              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 md:p-8 shadow-xl flex flex-col items-center justify-center">
+                <h3 className="font-serif text-2xl md:text-3xl mb-4 md:mb-6 text-rose">Menuju Hari Bahagia</h3>
                 <Countdown targetDate="2026-06-26T15:00:00" />
               </div>
 
               {/* SECTION: BRIDE & GROOM */}
-              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 shadow-xl flex flex-col justify-center">
-                <h3 className="font-serif text-xl mb-4 text-rose text-center">Mempelai</h3>
-                <div className="mb-4 text-center">
-                  <p className="font-bold text-sm text-[#4A2D3A]">Stefyana Dinda Pramadanty</p>
-                  <p className="text-[10px] text-[#9B6E82] mt-1 leading-snug">Putri dari Alm. Winky Septyagraha<br/>& Ibu Agustina Mardiana</p>
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-sm text-[#4A2D3A]">Usman Ohoiwuy</p>
-                  <p className="text-[10px] text-[#9B6E82] mt-1 leading-snug">Putra dari Alm. Fitra Ohoiwuy<br/>& Ibu Aliya Raharusun</p>
+              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 md:p-8 shadow-xl flex flex-col items-center justify-center">
+                <h3 className="font-serif text-2xl md:text-3xl mb-2 text-rose text-center">Pasangan Mempelai</h3>
+                <Separator />
+                
+                <div className="grid md:grid-cols-2 gap-4 md:gap-8 w-full mt-2">
+                  {/* Bride */}
+                  <div className="text-center p-6 border border-rose/30 rounded-xl bg-white/50 flex flex-col justify-center transition-transform hover:scale-[1.02]">
+                    <p className="font-serif text-xl md:text-2xl font-bold text-[#4A2D3A] mb-3">Stefyana Dinda Pramadanty</p>
+                    <p className="text-xs uppercase tracking-widest text-[#9B6E82] font-semibold mb-1">Putri dari:</p>
+                    <p className="text-sm md:text-base text-[#9B6E82] font-semibold leading-snug">Alm. Winky Septyagraha <br/> & Ibu Agustina Mardiana</p>
+                  </div>
+                  
+                  {/* Groom */}
+                  <div className="text-center p-6 border border-rose/30 rounded-xl bg-white/50 flex flex-col justify-center transition-transform hover:scale-[1.02]">
+                    <p className="font-serif text-xl md:text-2xl font-bold text-[#4A2D3A] mb-3">Usman Ohoiwuy</p>
+                    <p className="text-xs uppercase tracking-widest text-[#9B6E82] font-semibold mb-1">Putra dari:</p>
+                    <p className="text-sm md:text-base text-[#9B6E82] font-semibold leading-snug">Alm. Fitra Ohoiwuy <br/> & Ibu Aliya Raharusun</p>
+                  </div>
                 </div>
               </div>
 
               {/* SECTION: AKAD */}
-              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 shadow-xl md:col-span-2 flex flex-col items-center text-center justify-center">
-                <h4 className="font-bold text-rose text-sm mb-3 uppercase tracking-wide">Akad Nikah</h4>
-                <p className="text-xs font-bold text-[#4A2D3A]">Jum'at, 26 Juni 2026</p>
-                <p className="text-[10px] my-1 text-[#9B6E82]">15.00 - 18.00 WIB</p>
-                <p className="text-[10px] italic leading-tight mb-4 text-[#9B6E82]">Saung Apung Villa Nusa Indah, Kec. Gunung Putri, Kab. Bogor</p>
+              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 md:p-8 shadow-xl flex flex-col items-center text-center justify-center">
+                <h4 className="font-serif text-2xl md:text-3xl mb-4 text-rose capitalize">Akad Nikah</h4>
+                <p className="text-lg md:text-xl font-bold text-[#4A2D3A]">Jum'at, 26 Juni 2026</p>
+                <p className="text-sm md:text-base my-2 text-[#9B6E82]">15.00 - 18.00 WIB</p>
+                <p className="text-sm md:text-base italic leading-tight mb-4 text-[#9B6E82]">Saung Apung Villa Nusa Indah, Kec. Gunung Putri, Kab. Bogor</p>
                 <a 
                   href={generateCalendarLink("Akad Nikah", "2026-06-26T15:00:00", "Saung Apung Villa Nusa Indah")}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] border border-rose bg-white px-4 py-2 rounded text-rose hover:bg-rose hover:text-white transition-colors"
+                  className="text-xs md:text-sm border border-rose bg-white px-5 py-2.5 rounded hover:bg-rose text-rose hover:text-white transition-colors"
                 >
                   Simpan Kalender
                 </a>
               </div>
 
               {/* SECTION: PETA LOKASI */}
-              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 shadow-xl md:col-span-2 flex flex-col items-center">
-                <h3 className="font-serif text-xl mb-3 text-rose">Lokasi Acara</h3>
-                <p className="text-xs mb-4 text-gray-600 text-center">
+              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 md:p-8 shadow-xl flex flex-col items-center">
+                <h3 className="font-serif text-2xl md:text-3xl mb-4 text-rose">Lokasi Acara</h3>
+                <p className="text-sm md:text-base mb-4 text-[#9B6E82] text-center">
                   Saung Apung Villa Nusa Indah<br/>
                   Kec. Gunung Putri, Kab. Bogor 16969
                 </p>
@@ -402,13 +454,90 @@ export default function App() {
                 </a>
               </div>
 
+              {/* SECTION: UCAPAN & DOA */}
+              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 md:p-8 shadow-xl flex flex-col">
+                <div className="text-center mb-6">
+                  <h3 className="font-serif text-2xl md:text-3xl mb-2 text-rose flex items-center justify-center gap-2">
+                    <MessageSquareHeart className="text-rose" size={28} />
+                    Ucapan & Doa
+                  </h3>
+                  <p className="text-xs md:text-sm text-[#9B6E82]">Berikan ucapan dan doa terbaik untuk kami</p>
+                </div>
+
+                <form onSubmit={handleMessageSubmit} className="flex flex-col gap-3 mb-8 bg-white/50 p-4 rounded-xl border border-rose/30">
+                  <input 
+                    type="text" 
+                    placeholder="Nama Anda" 
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    required
+                    maxLength={50}
+                    className="w-full px-4 py-2 text-sm border border-rose/30 rounded-lg outline-none focus:border-rose focus:ring-1 focus:ring-rose/50 bg-white placeholder:text-[#9B6E82]/60 text-[#4A2D3A]"
+                  />
+                  <select
+                    value={newAttendance}
+                    onChange={(e) => setNewAttendance(e.target.value)}
+                    className="w-full px-4 py-2 text-sm border border-rose/30 rounded-lg outline-none focus:border-rose focus:ring-1 focus:ring-rose/50 bg-white text-[#4A2D3A]"
+                  >
+                    <option value="Hadir">Hadir</option>
+                    <option value="Tidak Hadir">Tidak Hadir</option>
+                  </select>
+                  <textarea 
+                    placeholder="Tulis ucapan & doa..." 
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    required
+                    rows={4}
+                    maxLength={300}
+                    className="w-full px-4 py-2 text-sm border border-rose/30 rounded-lg outline-none focus:border-rose focus:ring-1 focus:ring-rose/50 bg-white placeholder:text-[#9B6E82]/60 text-[#4A2D3A] resize-none overflow-y-auto"
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="self-end inline-flex items-center gap-2 px-6 py-2 bg-rose text-white text-sm font-semibold rounded-lg hover:bg-rose/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? 'Mengirim...' : (
+                      <>
+                        Kirim <Send size={14} />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <div className="flex flex-col gap-4 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
+                  {messages.length === 0 ? (
+                    <div className="text-center p-6 text-[#9B6E82] text-sm italic bg-white/40 rounded-xl border border-rose/10">
+                      Belum ada ucapan. Jadilah yang pertama memberikan ucapan!
+                    </div>
+                  ) : (
+                    messages.map((msg, idx) => (
+                      <div key={idx} className="bg-white/60 p-4 rounded-xl border border-rose/20 flex flex-col gap-1 relative group">
+                        <div className="flex items-center justify-between gap-4">
+                          <p className="font-bold text-[#4A2D3A] text-sm break-words flex items-center gap-2">
+                            {msg.name}
+                            {msg.attendance && (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap font-semibold ${msg.attendance === 'Hadir' ? 'bg-green-100 text-green-700' : msg.attendance === 'Tidak Hadir' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {msg.attendance}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <p className="text-xs md:text-sm text-[#4A2D3A] leading-relaxed break-words whitespace-pre-wrap mt-1">
+                          {msg.message}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
               {/* SECTION: WEDDING GIFT */}
-              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 shadow-xl md:col-span-2 text-center pb-8">
-                <h3 className="font-serif text-xl mb-4 text-rose">Love Gift</h3>
-                <p className="text-xs text-[#9B6E82] mb-6 max-w-xl mx-auto">
+              <div className="bg-white/80 backdrop-blur-sm border border-white/50 rounded-2xl p-6 md:p-8 shadow-xl flex flex-col items-center text-center">
+                <h3 className="font-serif text-2xl md:text-3xl mb-4 text-rose">Love Gift</h3>
+                <p className="text-sm md:text-base text-[#9B6E82] mb-8 max-w-xl mx-auto">
                   Doa restu Anda merupakan karunia yang sangat berarti bagi kami. Dan jika memberi adalah ungkapan tanda kasih Anda, Anda dapat memberi kado secara cashless atau mengirimkan kado fisik ke alamat berikut.
                 </p>
-                <div className="flex flex-row justify-around items-center flex-wrap gap-8 mb-8">
+                <div className="flex flex-row justify-around items-center flex-wrap gap-8 md:gap-12 w-full mb-8">
                   <RekeningCard 
                     bank="BCA" 
                     noRek="5725492275" 
@@ -427,11 +556,11 @@ export default function App() {
               </div>
               
               {/* FOOTER */}
-              <footer className="md:col-span-2 text-center py-8">
+              <footer className="text-center py-8">
                 <Separator />
-                <p className="font-serif italic text-2xl font-bold text-rose mb-1">Danty & Usman</p>
-                <p className="text-[10px] text-[#9B6E82] tracking-widest uppercase font-bold mb-4">Thank you</p>
-                <p className="text-[10px] text-rose tracking-widest font-semibold backdrop-blur-sm">#SuperMANforDANTY</p>
+                <p className="font-serif italic text-3xl font-bold text-rose mb-2">Danty & Usman</p>
+                <p className="text-xs md:text-sm text-[#9B6E82] tracking-widest uppercase font-bold mb-4">Thank you</p>
+                <p className="text-xs md:text-sm text-rose tracking-widest font-semibold backdrop-blur-sm">#SuperMANforDANTY</p>
               </footer>
 
             </div>
